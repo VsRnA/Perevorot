@@ -1,6 +1,19 @@
 import { useState } from 'react';
 import { getSocket } from '../../socket/socket';
 
+function actionLabel(action) {
+  const map = {
+    income: 'доход',
+    foreign_aid: 'иностранную помощь',
+    coup: 'переворот',
+    tax: 'налог',
+    assassinate: 'убийство',
+    steal: 'кражу',
+    exchange: 'обмен',
+  };
+  return map[action] ?? action;
+}
+
 const ACTIONS = [
   { id: 'income', label: 'Доход', desc: '+1 монета', needsTarget: false, role: null, cost: 0 },
   { id: 'foreign_aid', label: 'Иностр. помощь', desc: '+2 монеты', needsTarget: false, role: null, cost: 0 },
@@ -10,6 +23,10 @@ const ACTIONS = [
   { id: 'steal', label: 'Кража', desc: '+2 монеты цели (Капитан)', needsTarget: true, role: 'captain', cost: 0 },
   { id: 'exchange', label: 'Обмен', desc: 'Сменить карты (Посол)', needsTarget: false, role: 'ambassador', cost: 0 },
 ];
+
+function findUsername(players, userId) {
+  return players.find((p) => p.userId === userId)?.username ?? '?';
+}
 
 export function ActionPanel({ gameId, myPlayer, players, phase, pendingAction, myUserId }) {
   const socket = getSocket();
@@ -90,7 +107,11 @@ export function ActionPanel({ gameId, myPlayer, players, phase, pendingAction, m
   }
 
   // Фаза: блок / оспаривание
-  if ((phase === 'block' || phase === 'challenge_action' || phase === 'challenge_block') && !isActor) {
+  const shouldShowReaction =
+    ((phase === 'block' || phase === 'challenge_action') && !isActor) ||
+    (phase === 'challenge_block' && isActor);
+
+  if (shouldShowReaction) {
     const canBlock = phase === 'block' || phase === 'challenge_action';
     const canChallenge = phase === 'challenge_action' || phase === 'challenge_block';
     const action = pendingAction?.action;
@@ -99,8 +120,15 @@ export function ActionPanel({ gameId, myPlayer, players, phase, pendingAction, m
       <div className="card p-4">
         <p className="text-gray-400 text-sm mb-3">
           {phase === 'challenge_block'
-            ? `Игрок блокирует действие "${action}". Оспорить блок?`
-            : `Игрок заявляет "${action}". Ваш ответ:`}
+            ? <>
+                <span className="text-blue-300 font-semibold">@{findUsername(players, pendingAction?.blockerId)}</span>
+                {' '}блокирует твоё действие «{actionLabel(action)}». Оспорить блок?
+              </>
+            : <>
+                <span className="text-amber-400 font-semibold">@{findUsername(players, pendingAction?.actorId)}</span>
+                {' '}заявляет «{actionLabel(action)}». Ваш ответ:
+              </>
+          }
         </p>
         <div className="flex flex-wrap gap-2">
           {canChallenge && (

@@ -7,6 +7,7 @@ import { OpponentPanel } from '../components/game/OpponentPanel';
 import { GameCard } from '../components/game/PlayerCard';
 import { ActionPanel } from '../components/game/ActionPanel';
 import { GameLog } from '../components/game/GameLog';
+import { CardReference } from '../components/game/CardReference';
 
 export default function GamePage() {
   const { id: gameId } = useParams();
@@ -79,19 +80,31 @@ export default function GamePage() {
 
       {/* Center: pending action info */}
       {pendingAction && (
-        <div className="card px-4 py-3 text-center">
+        <div className="card px-4 py-3 text-center space-y-1">
           <p className="text-sm text-gray-300">
             <span className="text-amber-400 font-semibold">
-              {players.find((p) => p.userId === pendingAction.actorId)?.username}
+              @{players.find((p) => p.userId === pendingAction.actorId)?.username}
             </span>
             {' '}заявляет{' '}
             <span className="text-white font-semibold">{actionLabel(pendingAction.action)}</span>
             {pendingAction.targetId && (
-              <span> против <span className="text-red-400 font-semibold">
-                {players.find((p) => p.userId === pendingAction.targetId)?.username}
-              </span></span>
+              <span> против{' '}
+                <span className="text-red-400 font-semibold">
+                  @{players.find((p) => p.userId === pendingAction.targetId)?.username}
+                </span>
+              </span>
             )}
           </p>
+          {pendingAction.blockerId && (
+            <p className="text-sm text-gray-400">
+              🛡️{' '}
+              <span className="text-blue-300 font-semibold">
+                @{players.find((p) => p.userId === pendingAction.blockerId)?.username}
+              </span>
+              {' '}блокирует
+            </p>
+          )}
+          <p className="text-xs text-gray-600 uppercase tracking-widest">{phaseLabel(phase)}</p>
         </div>
       )}
 
@@ -128,6 +141,9 @@ export default function GamePage() {
           myUserId={user?.id}
         />
       )}
+
+      {/* Card reference */}
+      <CardReference />
     </div>
   );
 }
