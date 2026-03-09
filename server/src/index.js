@@ -10,6 +10,14 @@ import roomsRouter from './routes/rooms.js';
 import { registerLobbyHandlers } from './socket/lobby.js';
 import { registerGameHandlers } from './socket/game.js';
 
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason);
+});
+
 const app = express();
 const httpServer = createServer(app);
 

@@ -62,6 +62,20 @@ async function saveAndBroadcast(io, roomId, game) {
 
 export function registerGameHandlers(io) {
   io.on('connection', (socket) => {
+    // ── Присоединиться к игре (запрос текущего состояния) ─────────────────────
+    socket.on('game:join', async ({ gameId }) => {
+      try {
+        const game = await Game.findByPk(gameId);
+        if (!game) return;
+        const roomId = game.roomId;
+        socket.join(roomId);
+        const gamePlayers = await GamePlayer.findAll({ where: { gameId } });
+        await broadcastState(io, roomId, game, gamePlayers);
+      } catch (e) {
+        socket.emit('error', { message: e.message });
+      }
+    });
+
     // ── Старт игры (только хост) ─────────────────────────────────────────────
     socket.on('game:start', async ({ roomId }) => {
       try {

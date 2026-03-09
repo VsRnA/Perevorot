@@ -21,6 +21,9 @@ export default function GamePage() {
     socket.on('game:state', (state) => setGameState(state));
     socket.on('game:over', ({ winnerId }) => setWinner(winnerId));
 
+    // Запрашиваем текущее состояние игры при загрузке страницы
+    socket.emit('game:join', { gameId });
+
     return () => {
       socket.off('game:state');
       socket.off('game:over');
