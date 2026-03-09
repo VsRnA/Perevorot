@@ -63,7 +63,9 @@ async function saveAndBroadcast(io, roomId, game) {
   await game.save();
   await broadcastState(io, roomId, game, gamePlayers);
 
-  const winner = checkWinner(game.state);
+  // Во время байбэка игрок формально eliminated, но ещё не принял решение —
+  // проверять победителя рано, иначе игра завершится преждевременно.
+  const winner = game.state.phase !== 'buyback' ? checkWinner(game.state) : null;
   if (winner) {
     await game.update({ status: 'finished', winnerId: winner });
     await Room.update({ status: 'finished' }, { where: { id: roomId } });

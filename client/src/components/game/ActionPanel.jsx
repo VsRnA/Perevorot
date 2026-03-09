@@ -49,6 +49,15 @@ export function ActionPanel({ gameId, myPlayer, players, phase, pendingAction, m
   const isTarget = pendingAction?.targetId === myUserId;
   const opponents = players.filter((p) => p.userId !== myUserId && !p.isEliminated);
 
+  // Выбывший игрок не участвует ни в чём, кроме собственного экрана докупа
+  if (myPlayer.isEliminated && !(phase === 'buyback' && pendingAction?.loserId === myUserId)) {
+    return (
+      <div className="card p-4 text-center text-gray-600 text-sm">
+        Вы выбыли из игры
+      </div>
+    );
+  }
+
   const action = pendingAction?.action;
   // Действия с конкретной целью — реагировать может только цель
   const isTargetedAction = action === 'steal' || action === 'assassinate';

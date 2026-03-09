@@ -223,6 +223,9 @@ export function applyChallenge(state, { challengerId }) {
     throw new Error('Wrong phase');
   }
 
+  const challenger = state.players.find((p) => p.userId === challengerId);
+  if (!challenger || challenger.isEliminated) throw new Error('Eliminated players cannot act');
+
   const { action, actorId, blockerId, targetId } = state.pendingAction;
   const isBlockChallenge = state.phase === 'challenge_block';
   const defenderId = isBlockChallenge ? blockerId : actorId;
@@ -239,7 +242,6 @@ export function applyChallenge(state, { challengerId }) {
     : ACTION_ROLE[action];
 
   const defender = state.players.find((p) => p.userId === defenderId);
-  const challenger = state.players.find((p) => p.userId === challengerId);
 
   if (defender && requiredRole && playerHasRole(defender, requiredRole)) {
     // Challenger LOSES — защитник показывает карту и берёт новую из колоды
@@ -298,6 +300,9 @@ export function applyBlock(state, { blockerId }) {
     throw new Error('Wrong phase');
   }
 
+  const blocker = state.players.find((p) => p.userId === blockerId);
+  if (!blocker || blocker.isEliminated) throw new Error('Eliminated players cannot act');
+
   const { action, actorId, targetId } = state.pendingAction;
 
   if (blockerId === actorId) throw new Error('Cannot block your own action');
@@ -306,7 +311,6 @@ export function applyBlock(state, { blockerId }) {
     throw new Error('Only the target can block this action');
   }
 
-  const blocker = state.players.find((p) => p.userId === blockerId);
   state.pendingAction.blockerId = blockerId;
   state.pendingAction.passedBy = [];
   state.phase = 'challenge_block';
@@ -324,6 +328,9 @@ export function applyPass(state, { passerId }) {
   ) {
     throw new Error('Wrong phase');
   }
+
+  const passer = state.players.find((p) => p.userId === passerId);
+  if (!passer || passer.isEliminated) throw new Error('Eliminated players cannot act');
 
   const { blockerId } = state.pendingAction;
   if (!state.pendingAction.passedBy) state.pendingAction.passedBy = [];
