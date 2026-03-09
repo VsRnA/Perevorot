@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { getSocket } from '../../socket/socket';
 import { OpponentPanel } from './OpponentPanel';
+import { GameCard } from './PlayerCard';
 
 const ACTIONS = [
   { id: 'income',       label: 'Доход',           desc: '+1 монета',                  needsTarget: false, cost: 0 },
@@ -20,6 +21,12 @@ export function ActionPanel({ gameId, myPlayer, players, phase, pendingAction, m
   const socket = getSocket();
   const isMyTurn = myPlayer && myUserId === currentPlayerId;
   const [selectingTarget, setSelectingTarget] = useState(null);
+  const [selectedIndices, setSelectedIndices] = useState([]);
+
+  // Сбрасываем выбор при смене фазы
+  useEffect(() => {
+    setSelectedIndices([]);
+  }, [phase]);
 
   function sendAction(action, targetId = null) {
     socket.emit('game:action', { gameId, action, targetId });
@@ -91,9 +98,59 @@ export function ActionPanel({ gameId, myPlayer, players, phase, pendingAction, m
 
   // ── Обмен карт ───────────────────────────────────────────────────────────────
   if (phase === 'exchange' && isActor) {
+    const drawnCards = pendingAction?.drawnCards ?? [];
+    const aliveCards = myPlayer.cards.filter((c) => !c.revealed);
+    const combined = [...aliveCards, ...drawnCards]; // индексы для game:exchange
+    const mustKeep = aliveCards.length; // сколько карт нужно оставить
+
+    function toggleIndex(i) {
+      setSelectedIndices((prev) =>
+        prev.includes(i)
+          ? prev.filter((x) => x !== i)
+          : prev.length < mustKeep
+            ? [...prev, i]
+            : prev
+      );
+    }
+
+    function confirmExchange() {
+      socket.emit('game:exchange', { gameId, keptIndices: selectedIndices });
+    }
+
     return (
-      <div className="card p-4 text-center text-amber-400 font-semibold">
-        Ожидание выбора карт для обмена…
+      <div className="card p-4">
+        <p className="text-amber-400 font-semibold mb-1">
+          Обмен карт — выбери {mustKeep} {mustKeep === 1 ? 'карту' : 'карты'} для сохранения:
+        </p>
+        <p className="text-gray-500 text-xs mb-3">
+          Выбрано: {selectedIndices.length} / {mustKeep}
+        </p>
+        <div className="flex flex-wrap gap-3 justify-center mb-4">
+          {combined.map((card, i) => {
+            const isDrawn = i >= aliveCards.length;
+            return (
+              <div key={i} className="flex flex-col items-center gap-1">
+                <GameCard
+                  role={card.role}
+                  revealed={false}
+                  selectable
+                  selected={selectedIndices.includes(i)}
+                  onClick={() => toggleIndex(i)}
+                />
+                <span className="text-xs text-gray-500">
+                  {isDrawn ? 'Новая' : 'Моя'}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <button
+          onClick={confirmExchange}
+          disabled={selectedIndices.length !== mustKeep}
+          className="btn-primary w-full disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Подтвердить выбор
+        </button>
       </div>
     );
   }

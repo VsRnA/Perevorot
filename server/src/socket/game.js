@@ -38,7 +38,16 @@ async function broadcastState(io, _roomId, game, gamePlayers) {
       phase: state.phase,
       currentPlayerId: state.currentPlayerId,
       pendingAction: state.pendingAction
-        ? { action: state.pendingAction.action, actorId: state.pendingAction.actorId, targetId: state.pendingAction.targetId, blockerId: state.pendingAction.blockerId ?? null }
+        ? {
+            action: state.pendingAction.action,
+            actorId: state.pendingAction.actorId,
+            targetId: state.pendingAction.targetId,
+            blockerId: state.pendingAction.blockerId ?? null,
+            // drawnCards отправляем только самому актору
+            drawnCards: gp.userId === state.pendingAction.actorId
+              ? (state.pendingAction.drawnCards ?? null)
+              : null,
+          }
         : null,
       players: visiblePlayers,
       log: state.log.slice(-20),
