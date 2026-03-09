@@ -141,8 +141,22 @@ function checkElimination(player) {
 function nextTurn(state) {
   const active = getActivePlayers(state);
   const currentIdx = active.findIndex((p) => p.userId === state.currentPlayerId);
-  const nextIdx = currentIdx === -1 ? 0 : (currentIdx + 1) % active.length;
-  state.currentPlayerId = active[nextIdx].userId;
+
+  if (currentIdx === -1) {
+    // Текущий игрок выбыл (например, отказался от байбэка).
+    // Ищем следующего живого по исходному порядку state.players.
+    const fullIdx = state.players.findIndex((p) => p.userId === state.currentPlayerId);
+    for (let i = 1; i <= state.players.length; i++) {
+      const candidate = state.players[(fullIdx + i) % state.players.length];
+      if (!candidate.isEliminated) {
+        state.currentPlayerId = candidate.userId;
+        break;
+      }
+    }
+  } else {
+    state.currentPlayerId = active[(currentIdx + 1) % active.length].userId;
+  }
+
   state.phase = 'action';
   state.pendingAction = null;
 }
