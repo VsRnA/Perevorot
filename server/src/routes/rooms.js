@@ -11,6 +11,7 @@ function formatRoom(room) {
     code: room.code,
     status: room.status,
     maxPlayers: room.maxPlayers,
+    hostId: room.hostId,
     host: { id: room.host.id, username: room.host.username },
     players: room.players.map((p) => ({ id: p.id, username: p.username })),
   };
