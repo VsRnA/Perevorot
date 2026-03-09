@@ -141,9 +141,12 @@ export default function GamePage() {
                 </div>
               </div>
               <div className="flex gap-3 justify-center sm:justify-start">
-                {myPlayer.cards.map((card, i) => (
-                  <GameCard key={i} role={card.role} revealed={card.revealed} />
+                {myPlayer.cards.filter((c) => !c.revealed).map((card, i) => (
+                  <GameCard key={i} role={card.role} revealed={false} />
                 ))}
+                {myPlayer.cards.filter((c) => !c.revealed).length === 0 && (
+                  <span className="text-gray-600 text-sm">все карты потеряны</span>
+                )}
               </div>
             </div>
           )}

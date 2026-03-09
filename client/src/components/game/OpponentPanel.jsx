@@ -32,11 +32,14 @@ export function OpponentPanel({ player, isCurrentTurn, onTarget, isTargetable })
         <span className="text-amber-400 font-bold text-sm">{player.coins}</span>
       </div>
 
-      {/* Cards */}
+      {/* Только живые карты — раскрытые не показываем */}
       <div className="flex gap-1 justify-center">
-        {player.cards.map((card, i) => (
-          <GameCard key={i} role={card.role} revealed={card.revealed} small />
+        {player.cards.filter((c) => !c.revealed).map((_, i) => (
+          <GameCard key={i} role="hidden" revealed={false} small />
         ))}
+        {player.cards.filter((c) => !c.revealed).length === 0 && (
+          <span className="text-gray-600 text-xs">нет карт</span>
+        )}
       </div>
 
       {/* Target button */}

@@ -49,6 +49,32 @@ export function ActionPanel({ gameId, myPlayer, players, phase, pendingAction, m
   const isTarget = pendingAction?.targetId === myUserId;
   const opponents = players.filter((p) => p.userId !== myUserId && !p.isEliminated);
 
+  const action = pendingAction?.action;
+  // Действия с конкретной целью — реагировать может только цель
+  const isTargetedAction = action === 'steal' || action === 'assassinate';
+
+  // Кто видит панель реакции:
+  // • challenge_action + steal/assassinate → только цель
+  // • challenge_action + tax/exchange      → все кроме актора
+  // • block (foreign_aid)                  → все кроме актора
+  // • challenge_block                      → только актор (оспаривает блок своего действия)
+  let shouldShowReaction = false;
+  if (phase === 'challenge_action') {
+    shouldShowReaction = isTargetedAction ? isTarget : !isActor;
+  } else if (phase === 'block') {
+    shouldShowReaction = !isActor;
+  } else if (phase === 'challenge_block') {
+    shouldShowReaction = isActor;
+  }
+
+  // Что именно доступно:
+  // Блокировать можно:  steal/assassinate (цель в challenge_action) | foreign_aid (все в block)
+  const canBlock =
+    (phase === 'challenge_action' && isTargetedAction && isTarget) ||
+    (phase === 'block' && !isActor);
+  // Оспаривать можно в challenge_action и challenge_block (если shouldShowReaction уже верен)
+  const canChallenge = phase === 'challenge_action' || phase === 'challenge_block';
+
   // ── Выбор цели ──────────────────────────────────────────────────────────────
   if (selectingTarget) {
     return (
@@ -200,14 +226,7 @@ export function ActionPanel({ gameId, myPlayer, players, phase, pendingAction, m
   }
 
   // ── Блок / оспаривание ───────────────────────────────────────────────────────
-  const shouldShowReaction =
-    ((phase === 'block' || phase === 'challenge_action') && !isActor) ||
-    (phase === 'challenge_block' && isActor);
-
   if (shouldShowReaction) {
-    const canBlock     = (phase === 'block' || phase === 'challenge_action') && !isActor;
-    const canChallenge = phase === 'challenge_action' || phase === 'challenge_block';
-
     return (
       <div className="card p-4">
         <p className="text-gray-400 text-sm mb-3">

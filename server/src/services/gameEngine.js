@@ -223,11 +223,16 @@ export function applyChallenge(state, { challengerId }) {
     throw new Error('Wrong phase');
   }
 
-  const { action, actorId, blockerId } = state.pendingAction;
+  const { action, actorId, blockerId, targetId } = state.pendingAction;
   const isBlockChallenge = state.phase === 'challenge_block';
   const defenderId = isBlockChallenge ? blockerId : actorId;
 
   if (challengerId === defenderId) throw new Error('Cannot challenge yourself');
+
+  // Для steal/assassinate в фазе challenge_action оспорить может только цель
+  if (state.phase === 'challenge_action' && (action === 'steal' || action === 'assassinate')) {
+    if (challengerId !== targetId) throw new Error('Only the target can challenge this action');
+  }
 
   const requiredRole = isBlockChallenge
     ? BLOCKS[action]?.find((r) => playerHasRole(state.players.find((p) => p.userId === defenderId), r))
@@ -320,7 +325,7 @@ export function applyPass(state, { passerId }) {
     throw new Error('Wrong phase');
   }
 
-  const { actorId, blockerId } = state.pendingAction;
+  const { blockerId } = state.pendingAction;
   if (!state.pendingAction.passedBy) state.pendingAction.passedBy = [];
 
   if (!state.pendingAction.passedBy.includes(passerId)) {
@@ -330,7 +335,15 @@ export function applyPass(state, { passerId }) {
   const active = getActivePlayers(state);
 
   if (state.phase === 'block' || state.phase === 'challenge_action') {
-    const mustPass = active.filter((p) => p.userId !== actorId);
+    const { action: act, actorId: aId, targetId: tId } = state.pendingAction;
+    const isTargetedAction = act === 'steal' || act === 'assassinate';
+
+    // Для steal/assassinate в challenge_action достаточно пропуска только цели.
+    // Для остальных (tax, exchange, foreign_aid) — все кроме актора.
+    const mustPass = (state.phase === 'challenge_action' && isTargetedAction)
+      ? active.filter((p) => p.userId === tId)
+      : active.filter((p) => p.userId !== aId);
+
     if (mustPass.every((p) => state.pendingAction.passedBy.includes(p.userId))) {
       return resolveAction(state);
     }
@@ -419,7 +432,8 @@ export function applyExchange(state, { actorId, keptIndices }) {
   const returned = combined.filter((_, i) => !keptIndices.includes(i));
 
   actor.cards = [...actor.cards.filter((c) => c.revealed), ...kept];
-  state.deck.push(...returned);
+  // Колода хранит строки (role), возвращаем роли, не объекты
+  state.deck.push(...returned.map((c) => c.role));
   state.deck = shuffle(state.deck);
   addLog(state, `@${actor.username} обменял карты`);
   nextTurn(state);
@@ -460,7 +474,10 @@ function resolveAction(state) {
     }
 
     case 'exchange': {
-      const drawn = [state.deck.pop(), state.deck.pop()];
+      const drawn = [
+        { role: state.deck.pop(), revealed: false },
+        { role: state.deck.pop(), revealed: false },
+      ];
       state.pendingAction.drawnCards = drawn;
       state.phase = 'exchange';
       return { resolved: false };
