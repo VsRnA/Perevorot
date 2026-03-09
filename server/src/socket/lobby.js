@@ -1,6 +1,11 @@
 import jwt from 'jsonwebtoken';
 import { User, Room, RoomPlayer } from '../models/index.js';
 
+// Grace-period перед удалением игрока из комнаты при дисконнекте.
+// Это позволяет пережить перезагрузку страницы или кратковременный разрыв.
+const DISCONNECT_GRACE_MS = 5000;
+const pendingDisconnects = new Map(); // userId → timeoutId
+
 export function registerLobbyHandlers(io) {
   io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token;
@@ -17,6 +22,13 @@ export function registerLobbyHandlers(io) {
   });
 
   io.on('connection', (socket) => {
+    // Отменяем pending-дисконнект для этого пользователя (переподключение / смена страницы)
+    const userId = socket.user.id;
+    if (pendingDisconnects.has(userId)) {
+      clearTimeout(pendingDisconnects.get(userId));
+      pendingDisconnects.delete(userId);
+    }
+
     // Подключиться к комнате
     socket.on('room:join', async ({ roomId }) => {
       const room = await Room.findByPk(roomId, {
@@ -37,12 +49,19 @@ export function registerLobbyHandlers(io) {
       socket.leave(roomId);
     });
 
-    socket.on('disconnect', async () => {
-      const entries = await RoomPlayer.findAll({
-        where: { userId: socket.user.id },
-        include: [{ model: Room, where: { status: 'waiting' } }],
-      });
-      await Promise.all(entries.map((e) => e.destroy()));
+    socket.on('disconnect', () => {
+      const uid = socket.user.id;
+
+      const timer = setTimeout(async () => {
+        pendingDisconnects.delete(uid);
+        const entries = await RoomPlayer.findAll({
+          where: { userId: uid },
+          include: [{ model: Room, where: { status: 'waiting' } }],
+        });
+        await Promise.all(entries.map((e) => e.destroy()));
+      }, DISCONNECT_GRACE_MS);
+
+      pendingDisconnects.set(uid, timer);
     });
   });
 }

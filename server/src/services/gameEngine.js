@@ -56,7 +56,9 @@ export function initGame(playerIds) {
   return {
     deck,
     players,
-    currentPlayerIndex: 0,
+    // Храним userId текущего игрока, а не индекс,
+    // чтобы выбывание игрока не ломало порядок ходов.
+    currentPlayerId: playerIds[0],
     phase: 'action', // action | block | challenge_action | challenge_block | lose_card | exchange
     pendingAction: null,
     log: [],
@@ -70,8 +72,7 @@ export function getActivePlayers(state) {
 }
 
 export function getCurrentPlayer(state) {
-  const active = getActivePlayers(state);
-  return active[state.currentPlayerIndex % active.length];
+  return state.players.find((p) => p.userId === state.currentPlayerId);
 }
 
 function playerHasRole(player, role) {
@@ -95,7 +96,11 @@ function checkElimination(player) {
 
 function nextTurn(state) {
   const active = getActivePlayers(state);
-  state.currentPlayerIndex = (state.currentPlayerIndex + 1) % active.length;
+  // Ищем текущего игрока в актуальном списке активных (после возможного выбывания).
+  // Это гарантирует корректный переход даже если игрок с меньшим индексом выбыл.
+  const currentIdx = active.findIndex((p) => p.userId === state.currentPlayerId);
+  const nextIdx = currentIdx === -1 ? 0 : (currentIdx + 1) % active.length;
+  state.currentPlayerId = active[nextIdx].userId;
   state.phase = 'action';
   state.pendingAction = null;
 }
@@ -118,12 +123,10 @@ export function applyAction(state, { actorId, action, targetId }) {
   const actor = state.players.find((p) => p.userId === actorId);
   const target = targetId ? state.players.find((p) => p.userId === targetId) : null;
 
-  // Проверка: ход текущего игрока
   const current = getCurrentPlayer(state);
   if (current.userId !== actorId) throw new Error('Not your turn');
   if (state.phase !== 'action') throw new Error('Wrong phase');
 
-  // Проверка монет для переворота
   if (actor.coins >= 10 && action !== 'coup') {
     throw new Error('You must coup when you have 10+ coins');
   }
@@ -136,7 +139,7 @@ export function applyAction(state, { actorId, action, targetId }) {
       return { resolved: true };
 
     case 'foreign_aid':
-      state.pendingAction = { action, actorId, targetId: null };
+      state.pendingAction = { action, actorId, targetId: null, passedBy: [] };
       state.phase = 'block';
       addLog(state, `${actorId} claims foreign aid`);
       return { resolved: false };
@@ -161,7 +164,7 @@ export function applyAction(state, { actorId, action, targetId }) {
       }
       if (action === 'steal' && !target) throw new Error('Target required');
 
-      state.pendingAction = { action, actorId, targetId };
+      state.pendingAction = { action, actorId, targetId, passedBy: [] };
       state.phase = 'challenge_action';
       addLog(state, `${actorId} claims ${action}`);
       return { resolved: false };
@@ -180,8 +183,11 @@ export function applyChallenge(state, { challengerId }) {
 
   const { action, actorId, blockerId } = state.pendingAction;
   const isBlockChallenge = state.phase === 'challenge_block';
-
   const defenderId = isBlockChallenge ? blockerId : actorId;
+
+  // Нельзя оспаривать самого себя
+  if (challengerId === defenderId) throw new Error('Cannot challenge yourself');
+
   const requiredRole = isBlockChallenge
     ? BLOCKS[action]?.find((r) => playerHasRole(state.players.find((p) => p.userId === defenderId), r))
     : ACTION_ROLE[action];
@@ -190,7 +196,7 @@ export function applyChallenge(state, { challengerId }) {
   const challenger = state.players.find((p) => p.userId === challengerId);
 
   if (defender && requiredRole && playerHasRole(defender, requiredRole)) {
-    // Challenger loses — блефовавшего нет, защитник заменяет карту
+    // Challenger loses — защитник показывает карту и берёт новую
     revealCard(defender, requiredRole);
     defender.cards.push({ role: state.deck.pop(), revealed: false });
     loseRandomCard(challenger);
@@ -198,7 +204,7 @@ export function applyChallenge(state, { challengerId }) {
     addLog(state, `${challengerId} challenged and lost`);
 
     if (isBlockChallenge) {
-      // Блок устоял — продолжаем как будто было заблокировано
+      // Блок устоял — действие заблокировано, следующий ход
       nextTurn(state);
     } else {
       // Действие подтверждено — выполняем его
@@ -231,25 +237,60 @@ export function applyBlock(state, { blockerId }) {
     throw new Error('Wrong phase');
   }
 
+  const { action, actorId, targetId } = state.pendingAction;
+
+  if (blockerId === actorId) throw new Error('Cannot block your own action');
+  if (!BLOCKS[action]) throw new Error('This action cannot be blocked');
+  // Steal и Assassinate может блокировать только цель
+  if ((action === 'steal' || action === 'assassinate') && blockerId !== targetId) {
+    throw new Error('Only the target can block this action');
+  }
+
   state.pendingAction.blockerId = blockerId;
+  state.pendingAction.passedBy = []; // сбрасываем passes для новой фазы challenge_block
   state.phase = 'challenge_block';
   addLog(state, `${blockerId} blocks`);
   return { resolved: false };
 }
 
-// ─── Пропуск (все согласны) ───────────────────────────────────────────────────
+// ─── Пропуск — консенсус всех игроков ────────────────────────────────────────
 
 export function applyPass(state, { passerId }) {
-  // passerId = ID игрока, который пропускает возможность оспорить/заблокировать
-  // Логика отслеживания кто пропустил — на уровне socket-handler
+  if (
+    state.phase !== 'block' &&
+    state.phase !== 'challenge_action' &&
+    state.phase !== 'challenge_block'
+  ) {
+    throw new Error('Wrong phase');
+  }
+
+  const { actorId, blockerId } = state.pendingAction;
+  if (!state.pendingAction.passedBy) state.pendingAction.passedBy = [];
+
+  if (!state.pendingAction.passedBy.includes(passerId)) {
+    state.pendingAction.passedBy.push(passerId);
+  }
+
+  const active = getActivePlayers(state);
+
   if (state.phase === 'block' || state.phase === 'challenge_action') {
-    return resolveAction(state);
+    // Все активные игроки кроме актора должны пропустить
+    const mustPass = active.filter((p) => p.userId !== actorId);
+    if (mustPass.every((p) => state.pendingAction.passedBy.includes(p.userId))) {
+      return resolveAction(state);
+    }
+    return { resolved: false };
   }
+
   if (state.phase === 'challenge_block') {
-    nextTurn(state);
-    return { resolved: true };
+    // Все активные игроки кроме блокировщика должны пропустить
+    const mustPass = active.filter((p) => p.userId !== blockerId);
+    if (mustPass.every((p) => state.pendingAction.passedBy.includes(p.userId))) {
+      nextTurn(state);
+      return { resolved: true };
+    }
+    return { resolved: false };
   }
-  throw new Error('Wrong phase');
 }
 
 // ─── Потеря карты (coup / assassinate) ───────────────────────────────────────
@@ -316,12 +357,13 @@ function resolveAction(state) {
       state.phase = 'lose_card';
       return { resolved: false };
 
-    case 'steal':
+    case 'steal': {
       const stolen = Math.min(2, target.coins);
       target.coins -= stolen;
       actor.coins += stolen;
       nextTurn(state);
       break;
+    }
 
     case 'exchange': {
       const drawn = [state.deck.pop(), state.deck.pop()];

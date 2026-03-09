@@ -36,9 +36,9 @@ async function broadcastState(io, _roomId, game, gamePlayers) {
     targetSocket.emit('game:state', {
       gameId: game.id,
       phase: state.phase,
-      currentPlayerIndex: state.currentPlayerIndex,
+      currentPlayerId: state.currentPlayerId,
       pendingAction: state.pendingAction
-        ? { action: state.pendingAction.action, actorId: state.pendingAction.actorId, targetId: state.pendingAction.targetId }
+        ? { action: state.pendingAction.action, actorId: state.pendingAction.actorId, targetId: state.pendingAction.targetId, blockerId: state.pendingAction.blockerId ?? null }
         : null,
       players: visiblePlayers,
       log: state.log.slice(-20),

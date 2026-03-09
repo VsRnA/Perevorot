@@ -3,7 +3,7 @@ import { create } from 'zustand';
 export const useGameStore = create((set) => ({
   gameId: null,
   phase: null,
-  currentPlayerIndex: null,
+  currentPlayerId: null,
   pendingAction: null,
   players: [],
   log: [],
@@ -13,7 +13,7 @@ export const useGameStore = create((set) => ({
   setGameId: (gameId) => set({ gameId }),
   setWinner: (winnerId) => set({ winner: winnerId }),
   reset: () => set({
-    gameId: null, phase: null, currentPlayerIndex: null,
+    gameId: null, phase: null, currentPlayerId: null,
     pendingAction: null, players: [], log: [], winner: null,
   }),
 }));

@@ -13,29 +13,34 @@ export default function GamePage() {
   const { id: gameId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const { phase, currentPlayerIndex, pendingAction, players, log, winner, setGameState, setWinner, reset } = useGameStore();
+  const { phase, currentPlayerId, pendingAction, players, log, winner, setGameState, setWinner, reset } = useGameStore();
 
   useEffect(() => {
     const socket = getSocket();
     if (!socket) { navigate('/lobby'); return; }
 
-    socket.on('game:state', (state) => setGameState(state));
-    socket.on('game:over', ({ winnerId }) => setWinner(winnerId));
+    function onState(state) { setGameState(state); }
+    function onOver({ winnerId }) { setWinner(winnerId); }
+    // При переподключении повторно запрашиваем состояние игры
+    function onConnect() { socket.emit('game:join', { gameId }); }
+
+    socket.on('game:state', onState);
+    socket.on('game:over', onOver);
+    socket.on('connect', onConnect);
 
     // Запрашиваем текущее состояние игры при загрузке страницы
     socket.emit('game:join', { gameId });
 
     return () => {
-      socket.off('game:state');
-      socket.off('game:over');
+      socket.off('game:state', onState);
+      socket.off('game:over', onOver);
+      socket.off('connect', onConnect);
       reset();
     };
   }, [gameId]);
 
   const myPlayer = players.find((p) => p.userId === user?.id);
   const opponents = players.filter((p) => p.userId !== user?.id);
-  const activePlayers = players.filter((p) => !p.isEliminated);
-  const currentPlayerId = activePlayers[currentPlayerIndex % activePlayers.length]?.userId;
 
   if (winner) {
     const winnerPlayer = players.find((p) => p.userId === winner);
@@ -139,6 +144,7 @@ export default function GamePage() {
           phase={phase}
           pendingAction={pendingAction}
           myUserId={user?.id}
+          currentPlayerId={currentPlayerId}
         />
       )}
 

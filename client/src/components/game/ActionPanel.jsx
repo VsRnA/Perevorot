@@ -28,9 +28,9 @@ function findUsername(players, userId) {
   return players.find((p) => p.userId === userId)?.username ?? '?';
 }
 
-export function ActionPanel({ gameId, myPlayer, players, phase, pendingAction, myUserId }) {
+export function ActionPanel({ gameId, myPlayer, players, phase, pendingAction, myUserId, currentPlayerId }) {
   const socket = getSocket();
-  const isMyTurn = myPlayer && !myPlayer.isEliminated;
+  const isMyTurn = myPlayer && myUserId === currentPlayerId;
   const [selectingTarget, setSelectingTarget] = useState(null);
 
   function sendAction(action, targetId = null) {

@@ -8,6 +8,11 @@ export function getSocket() {
 
 export function connectSocket(token) {
   if (socket?.connected) return socket;
+  // Корректно закрываем старый сокет перед созданием нового
+  if (socket) {
+    socket.disconnect();
+    socket = null;
+  }
   socket = io({ auth: { token } });
   return socket;
 }
