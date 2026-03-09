@@ -46,10 +46,15 @@ export default function RoomPage() {
       navigate(`/game/${gameId}`);
     });
 
+    socket.on('room:closed', () => {
+      navigate('/lobby');
+    });
+
     return () => {
       socket.emit('room:leave', { roomId: id });
       socket.off('room:updated');
       socket.off('game:started');
+      socket.off('room:closed');
     };
   }, [id]);
 

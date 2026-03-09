@@ -61,7 +61,7 @@ export default function LobbyPage() {
 
       <main className="flex-1 max-w-3xl mx-auto w-full px-4 py-8">
         {/* Join / Create */}
-        <div className="flex gap-3 mb-8">
+        <div className="flex flex-col sm:flex-row gap-2 mb-8">
           <input
             className="input flex-1"
             placeholder="Код комнаты (например: AB12CD)"
@@ -70,10 +70,14 @@ export default function LobbyPage() {
             onKeyDown={(e) => e.key === 'Enter' && joinRoom()}
             maxLength={6}
           />
-          <button onClick={joinRoom} className="btn-outline whitespace-nowrap">Войти</button>
-          <button onClick={createRoom} className="btn-primary whitespace-nowrap" disabled={loading}>
-            + Создать
-          </button>
+          <div className="flex gap-2">
+            <button onClick={joinRoom} className="btn-outline flex-1 sm:flex-none whitespace-nowrap">
+              Войти
+            </button>
+            <button onClick={createRoom} className="btn-primary flex-1 sm:flex-none whitespace-nowrap" disabled={loading}>
+              + Создать
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -118,11 +122,14 @@ function RoomCard({ room, onJoin }) {
   const isFull = room.players.length >= room.maxPlayers;
 
   return (
-    <div className="card px-5 py-4 flex items-center justify-between">
-      <div className="flex items-center gap-4">
-        <span className="font-mono text-amber-400 font-bold tracking-widest">{room.code}</span>
-        <span className="text-gray-300">@{room.host.username}</span>
-        <div className="flex gap-1">
+    <div className="card px-4 py-3 flex items-center gap-3">
+      {/* Код */}
+      <span className="font-mono text-amber-400 font-bold tracking-widest shrink-0">{room.code}</span>
+
+      {/* Хост + слоты */}
+      <div className="flex-1 min-w-0 flex items-center gap-2 overflow-hidden">
+        <span className="text-gray-300 text-sm truncate">@{room.host.username}</span>
+        <div className="flex gap-1 shrink-0">
           {Array.from({ length: room.maxPlayers }).map((_, i) => (
             <div
               key={i}
@@ -130,9 +137,11 @@ function RoomCard({ room, onJoin }) {
             />
           ))}
         </div>
-        <span className="text-gray-500 text-sm">{room.players.length}/{room.maxPlayers}</span>
+        <span className="text-gray-500 text-xs shrink-0">{room.players.length}/{room.maxPlayers}</span>
       </div>
-      <button onClick={join} className="btn-ghost text-sm px-3 py-1.5" disabled={isFull}>
+
+      {/* Кнопка всегда справа, не сжимается */}
+      <button onClick={join} className="btn-ghost text-sm px-3 py-1.5 shrink-0" disabled={isFull}>
         {isFull ? 'Полная' : 'Войти'}
       </button>
     </div>

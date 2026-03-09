@@ -96,6 +96,50 @@ export function ActionPanel({ gameId, myPlayer, players, phase, pendingAction, m
     );
   }
 
+  // ── Докуп карты ──────────────────────────────────────────────────────────────
+  if (phase === 'buyback' && pendingAction?.loserId === myUserId) {
+    const cost = pendingAction.buybackCost;
+    const canAfford = myPlayer.coins >= cost;
+
+    return (
+      <div className="card p-4 border border-amber-600/40">
+        <p className="text-amber-400 font-semibold mb-1">Докуп карты</p>
+        <p className="text-gray-400 text-sm mb-4">
+          Хочешь докупить карту из колоды за{' '}
+          <span className="text-amber-400 font-bold">{cost} монет</span>?{' '}
+          У тебя сейчас <span className="text-amber-400 font-bold">{myPlayer.coins}</span> монет.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => socket.emit('game:buyback', { gameId, accept: true })}
+            disabled={!canAfford}
+            className="btn-primary flex-1 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Докупить за {cost} монет
+          </button>
+          <button
+            onClick={() => socket.emit('game:buyback', { gameId, accept: false })}
+            className="btn-ghost flex-1"
+          >
+            Отказаться
+          </button>
+        </div>
+        {!canAfford && (
+          <p className="text-red-400 text-xs mt-2">Недостаточно монет</p>
+        )}
+      </div>
+    );
+  }
+
+  if (phase === 'buyback' && pendingAction?.loserId !== myUserId) {
+    const loserName = findUsername(players, pendingAction?.loserId);
+    return (
+      <div className="card p-4 text-center text-gray-600 text-sm">
+        @{loserName} решает — докупить карту…
+      </div>
+    );
+  }
+
   // ── Обмен карт ───────────────────────────────────────────────────────────────
   if (phase === 'exchange' && isActor) {
     const drawnCards = pendingAction?.drawnCards ?? [];

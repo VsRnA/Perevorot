@@ -26,6 +26,42 @@ const ACTION_LABELS_RU = {
   exchange: 'обмен карт',
 };
 
+// ─── Докуп ────────────────────────────────────────────────────────────────────
+// При потере первой карты (осталась 1 живая) — 5 монет
+// При потере последней карты (выбыл) — 3 монеты
+// Максимум 2 раза за игру на игрока
+
+const BUYBACK_COST_FIRST = 5; // потерял первую, осталась одна
+const BUYBACK_COST_LAST  = 3; // потерял последнюю, выбыл
+const BUYBACK_MAX = 2;
+
+function buybackCost(player) {
+  const alive = player.cards.filter((c) => !c.revealed).length;
+  return alive === 0 ? BUYBACK_COST_LAST : BUYBACK_COST_FIRST;
+}
+
+function canBuyback(player) {
+  const used = player.buybacksUsed ?? 0;
+  if (used >= BUYBACK_MAX) return false;
+  return player.coins >= buybackCost(player);
+}
+
+// Переходим в фазу докупа; continuation = 'next_turn' | 'resolve_action'
+// prevPendingAction нужен если continuation = 'resolve_action'
+function enterBuybackPhase(state, player, continuation, prevPendingAction = null) {
+  const cost = buybackCost(player);
+  addLog(state, `@${player.username} может докупить карту за ${cost} монет`);
+  state.pendingAction = {
+    action: 'buyback',
+    loserId: player.userId,
+    buybackCost: cost,
+    continuation,
+    prevPendingAction,
+  };
+  state.phase = 'buyback';
+  return { resolved: false };
+}
+
 // ─── Колода ──────────────────────────────────────────────────────────────────
 
 function buildDeck() {
@@ -59,6 +95,7 @@ export function initGame(players) {
       { role: deck.pop(), revealed: false },
     ],
     isEliminated: false,
+    buybacksUsed: 0,
     turnOrder: index,
   }));
 
@@ -66,7 +103,7 @@ export function initGame(players) {
     deck,
     players: statePlayers,
     currentPlayerId: players[0].id,
-    phase: 'action', // action | block | challenge_action | challenge_block | lose_card | exchange
+    phase: 'action', // action | block | challenge_action | challenge_block | lose_card | exchange | buyback
     pendingAction: null,
     log: [],
   };
@@ -200,12 +237,22 @@ export function applyChallenge(state, { challengerId }) {
   const challenger = state.players.find((p) => p.userId === challengerId);
 
   if (defender && requiredRole && playerHasRole(defender, requiredRole)) {
-    // Challenger loses — защитник показывает карту и берёт новую
+    // Challenger LOSES — защитник показывает карту и берёт новую из колоды
     revealCard(defender, requiredRole);
     defender.cards.push({ role: state.deck.pop(), revealed: false });
     loseRandomCard(challenger);
     checkElimination(challenger);
     addLog(state, `@${challenger.username} оспорил и проиграл — @${defender.username} имел нужную карту`);
+
+    if (canBuyback(challenger)) {
+      // continuation: block challenge → next_turn; action challenge → resolve_action
+      const saved = { ...state.pendingAction };
+      return enterBuybackPhase(
+        state, challenger,
+        isBlockChallenge ? 'next_turn' : 'resolve_action',
+        isBlockChallenge ? null : saved,
+      );
+    }
 
     if (isBlockChallenge) {
       nextTurn(state);
@@ -213,11 +260,21 @@ export function applyChallenge(state, { challengerId }) {
       return resolveAction(state);
     }
   } else {
+    // Defender BLUFFING — challenger wins
     if (defender) {
       loseRandomCard(defender);
       checkElimination(defender);
     }
     addLog(state, `@${challenger.username} оспорил и выиграл — @${defender?.username} блефовал`);
+
+    if (canBuyback(defender)) {
+      const saved = { ...state.pendingAction };
+      return enterBuybackPhase(
+        state, defender,
+        isBlockChallenge ? 'resolve_action' : 'next_turn',
+        isBlockChallenge ? saved : null,
+      );
+    }
 
     if (isBlockChallenge) {
       return resolveAction(state);
@@ -304,6 +361,43 @@ export function applyLoseCard(state, { loserId, cardIndex }) {
   card.revealed = true;
   checkElimination(loser);
   addLog(state, `@${loser.username} потерял карту${loser.isEliminated ? ' и выбыл из игры' : ''}`);
+
+  // Предлагаем докуп если игрок может себе позволить
+  if (canBuyback(loser)) {
+    return enterBuybackPhase(state, loser, 'next_turn');
+  }
+
+  nextTurn(state);
+  return { resolved: true };
+}
+
+// ─── Докуп карты ─────────────────────────────────────────────────────────────
+
+export function applyBuyback(state, { playerId, accept }) {
+  if (state.phase !== 'buyback') throw new Error('Wrong phase');
+
+  const { loserId, buybackCost: cost, continuation, prevPendingAction } = state.pendingAction;
+  if (playerId !== loserId) throw new Error('Not your decision');
+
+  const player = state.players.find((p) => p.userId === playerId);
+
+  if (accept) {
+    if (player.coins < cost) throw new Error('Not enough coins');
+    player.coins -= cost;
+    player.cards.push({ role: state.deck.pop(), revealed: false });
+    player.isEliminated = false; // снимаем выбывание если выкупил последнюю карту
+    player.buybacksUsed = (player.buybacksUsed ?? 0) + 1;
+    addLog(state, `@${player.username} докупил карту за ${cost} монет`);
+  } else {
+    addLog(state, `@${player.username} отказался от докупа`);
+  }
+
+  if (continuation === 'resolve_action') {
+    state.pendingAction = prevPendingAction; // восстанавливаем для resolveAction
+    return resolveAction(state);
+  }
+
+  // continuation === 'next_turn' (или undefined — из applyLoseCard)
   nextTurn(state);
   return { resolved: true };
 }

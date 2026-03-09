@@ -7,6 +7,7 @@ import {
   applyPass,
   applyLoseCard,
   applyExchange,
+  applyBuyback,
   checkWinner,
   getActivePlayers,
 } from '../services/gameEngine.js';
@@ -39,11 +40,13 @@ async function broadcastState(io, _roomId, game, gamePlayers) {
       currentPlayerId: state.currentPlayerId,
       pendingAction: state.pendingAction
         ? {
-            action: state.pendingAction.action,
-            actorId: state.pendingAction.actorId,
-            targetId: state.pendingAction.targetId,
-            blockerId: state.pendingAction.blockerId ?? null,
-            // drawnCards отправляем только самому актору
+            action:      state.pendingAction.action,
+            actorId:     state.pendingAction.actorId     ?? null,
+            targetId:    state.pendingAction.targetId    ?? null,
+            blockerId:   state.pendingAction.blockerId   ?? null,
+            loserId:     state.pendingAction.loserId     ?? null,
+            buybackCost: state.pendingAction.buybackCost ?? null,
+            // drawnCards только актору
             drawnCards: gp.userId === state.pendingAction.actorId
               ? (state.pendingAction.drawnCards ?? null)
               : null,
@@ -205,6 +208,22 @@ export function registerGameHandlers(io) {
         if (!game) return socket.emit('error', { message: 'Game not found' });
 
         applyExchange(game.state, { actorId: socket.user.id, keptIndices });
+        game.changed('state', true);
+
+        const room = await Room.findByPk(game.roomId);
+        await saveAndBroadcast(io, room.id, game);
+      } catch (e) {
+        socket.emit('error', { message: e.message });
+      }
+    });
+
+    // ── Докуп карты ───────────────────────────────────────────────────────────
+    socket.on('game:buyback', async ({ gameId, accept }) => {
+      try {
+        const game = await Game.findByPk(gameId);
+        if (!game) return socket.emit('error', { message: 'Game not found' });
+
+        applyBuyback(game.state, { playerId: socket.user.id, accept });
         game.changed('state', true);
 
         const room = await Room.findByPk(game.roomId);

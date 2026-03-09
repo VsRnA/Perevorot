@@ -8,7 +8,9 @@ import RoomPage from './pages/RoomPage';
 import GamePage from './pages/GamePage';
 
 function ProtectedRoute({ children }) {
-  const { user } = useAuthStore();
+  const { user, loading } = useAuthStore();
+  // Пока идёт проверка токена — не редиректим, ждём ответа сервера
+  if (loading) return null;
   if (!user) return <Navigate to="/auth" replace />;
   return children;
 }

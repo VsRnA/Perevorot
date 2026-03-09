@@ -177,6 +177,7 @@ function phaseLabel(phase) {
     challenge_block: 'Оспаривание блока',
     lose_card: 'Выбор карты',
     exchange: 'Обмен карт',
+    buyback: 'Докуп карты',
   };
   return map[phase] ?? '';
 }
