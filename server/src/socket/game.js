@@ -11,21 +11,20 @@ import {
   getActivePlayers,
 } from '../services/gameEngine.js';
 
-// Отправить состояние игры всем в комнате.
+// Отправить состояние игры всем игрокам.
 // Каждый игрок видит только свои закрытые карты.
-async function broadcastState(io, roomId, game, gamePlayers) {
-  const playerMap = {};
-  for (const gp of gamePlayers) {
-    playerMap[gp.userId] = gp;
-  }
+async function broadcastState(io, _roomId, game, gamePlayers) {
+  const state = game.state;
 
   for (const gp of gamePlayers) {
-    const socketId = [...(io.sockets.adapter.rooms.get(roomId) || [])].find(
-      (sid) => io.sockets.sockets.get(sid)?.user?.id === gp.userId,
-    );
-    if (!socketId) continue;
+    // Ищем сокет среди всех подключённых, а не только внутри комнаты,
+    // чтобы избежать гонки при переходе lobby → game page.
+    let targetSocket = null;
+    for (const [, s] of io.sockets.sockets) {
+      if (s.user?.id === gp.userId) { targetSocket = s; break; }
+    }
+    if (!targetSocket) continue;
 
-    const state = game.state;
     const visiblePlayers = state.players.map((p) => {
       if (p.userId === gp.userId) return p; // свои карты видны
       return {
@@ -34,7 +33,7 @@ async function broadcastState(io, roomId, game, gamePlayers) {
       };
     });
 
-    io.to(socketId).emit('game:state', {
+    targetSocket.emit('game:state', {
       gameId: game.id,
       phase: state.phase,
       currentPlayerIndex: state.currentPlayerIndex,

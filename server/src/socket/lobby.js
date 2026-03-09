@@ -1,6 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { User, Room, RoomPlayer, Game, GamePlayer } from '../models/index.js';
-import { initGame } from '../services/gameEngine.js';
+import { User, Room, RoomPlayer } from '../models/index.js';
 
 export function registerLobbyHandlers(io) {
   io.use(async (socket, next) => {
@@ -38,42 +37,12 @@ export function registerLobbyHandlers(io) {
       socket.leave(roomId);
     });
 
-    // Старт игры (только хост)
-    socket.on('game:start', async ({ roomId }) => {
-      const room = await Room.findByPk(roomId, {
-        include: [{ model: User, as: 'players', attributes: ['id', 'username'] }],
+    socket.on('disconnect', async () => {
+      const entries = await RoomPlayer.findAll({
+        where: { userId: socket.user.id },
+        include: [{ model: Room, where: { status: 'waiting' } }],
       });
-      if (!room) return;
-      if (room.hostId !== socket.user.id) return;
-      if (room.players.length < 2) return;
-
-      const playerIds = room.players.map((p) => p.id);
-      const gameState = initGame(playerIds);
-
-      const game = await Game.create({
-        roomId: room.id,
-        state: gameState,
-        currentPlayerIndex: 0,
-      });
-
-      await Promise.all(
-        gameState.players.map((p) =>
-          GamePlayer.create({
-            gameId: game.id,
-            userId: p.userId,
-            coins: p.coins,
-            cards: p.cards,
-            isEliminated: p.isEliminated,
-            turnOrder: p.turnOrder,
-          })
-        )
-      );
-
-      await room.update({ status: 'playing' });
-
-      io.to(roomId).emit('game:started', { gameId: game.id });
+      await Promise.all(entries.map((e) => e.destroy()));
     });
-
-    socket.on('disconnect', () => {});
   });
 }
