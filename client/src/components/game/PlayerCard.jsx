@@ -16,27 +16,36 @@ const ROLE_COLORS = {
   hidden: 'from-gray-800 to-gray-700 border-gray-600',
 };
 
-export function GameCard({ role, revealed, selectable, selected, onClick }) {
-  const colorClass = revealed ? 'from-gray-900 to-gray-800 border-gray-700 opacity-40' : ROLE_COLORS[role] || ROLE_COLORS.hidden;
+export function GameCard({ role, revealed, selectable, selected, onClick, small }) {
+  const colorClass = revealed
+    ? 'from-gray-900 to-gray-800 border-gray-700 opacity-40'
+    : ROLE_COLORS[role] || ROLE_COLORS.hidden;
+
+  const sizeClass = small
+    ? 'w-12 h-[4.5rem] rounded-lg'
+    : 'w-16 h-24 sm:w-20 sm:h-28 rounded-xl';
 
   return (
     <button
       onClick={onClick}
       disabled={!selectable}
       className={`
-        relative w-20 h-28 rounded-xl border-2 bg-gradient-to-b flex flex-col items-center justify-center
+        relative border-2 bg-gradient-to-b flex flex-col items-center justify-center
         transition-all duration-200
+        ${sizeClass}
         ${colorClass}
         ${selectable ? 'cursor-pointer hover:scale-105 hover:shadow-lg hover:shadow-amber-500/20' : 'cursor-default'}
         ${selected ? 'ring-2 ring-amber-400 scale-105' : ''}
       `}
     >
-      <span className="text-2xl mb-1">
+      <span className={small ? 'text-base mb-0.5' : 'text-2xl mb-1'}>
         {revealed ? '💀' : role === 'hidden' ? '🂠' : roleEmoji(role)}
       </span>
-      <span className="text-xs font-semibold text-center px-1">
-        {revealed ? 'Раскрыта' : ROLE_LABELS[role]}
-      </span>
+      {!small && (
+        <span className="text-xs font-semibold text-center px-1">
+          {revealed ? 'Раскрыта' : ROLE_LABELS[role]}
+        </span>
+      )}
     </button>
   );
 }

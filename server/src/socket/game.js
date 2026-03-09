@@ -79,7 +79,7 @@ export function registerGameHandlers(io) {
     socket.on('game:start', async ({ roomId }) => {
       try {
         const room = await Room.findByPk(roomId, {
-          include: [{ model: User, as: 'players', attributes: ['id'] }],
+          include: [{ model: User, as: 'players', attributes: ['id', 'username'] }],
         });
 
         if (!room) return socket.emit('error', { message: 'Room not found' });
@@ -87,8 +87,8 @@ export function registerGameHandlers(io) {
         if (room.players.length < 2) return socket.emit('error', { message: 'Need at least 2 players' });
         if (room.status !== 'waiting') return socket.emit('error', { message: 'Game already started' });
 
-        const playerIds = room.players.map((p) => p.id);
-        const state = initGame(playerIds);
+        const players = room.players.map((p) => ({ id: p.id, username: p.username }));
+        const state = initGame(players);
 
         const game = await Game.create({ roomId, state });
         await GamePlayer.bulkCreate(
